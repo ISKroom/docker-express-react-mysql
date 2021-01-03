@@ -1,0 +1,66 @@
+version: '3'
+services:
+
+  nginx:
+    depends_on:
+      - api
+      - client
+    restart: always
+    build:
+      dockerfile: Dockerfile.dev
+      context: ./nginx
+    ports:
+      - '80:80'
+
+  mysql:
+    build:
+      dockerfile: Dockerfile
+      context: ./mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=sample_db
+      - MYSQL_USER=docker
+      - MYSQL_PASSWORD=password
+    ports:
+      - '3306:3306'
+
+  api:
+    build:
+      dockerfile: Dockerfile.dev
+      context: ./server
+    depends_on:
+      - mysql
+    volumes:
+      - /app/node_modules
+      - ./server:/app
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASS=password
+      - DB_NAME=sample_db
+
+  client:
+    stdin_open: true
+    build:
+      dockerfile: Dockerfile.dev
+      context: ./client
+    volumes:
+      - /app/node_modules
+      - ./client:/app
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+
+  phpmyadmin:
+    build:
+      dockerfile: Dockerfile
+      context: ./phpmyadmin
+    environment:
+      - PMA_ARBITRARY=1
+      - PMA_HOST=mysql
+      - PMA_USER=root
+      - PMA_PASSWORD=password
+    links:
+      - mysql
+    ports:
+       - 8080:80

@@ -1,0 +1,103 @@
+〇 苦労ポイント
+1. docker-compose up の前に server/ と client/ で npm install しておく
+2. mysqlのdocker imageのバージョンは 8 だとプロトコルが変わってるからエラーになる
+
+
+〇 RDS等と接続したい場合は以下参考
+https://github.com/ISKroom/multi-docker
+
+〇 client\nginx\default.conf
+---
+server {
+  listen 3000;
+
+  location / {
+    root /usr/share/nginx/html;         # Specifies the root directory that will be used to search for a file in nginx.
+    index index.html index.htm;         # Specifies to nginx the name of the index file to be used. We could have an index file with varying names
+    try_files $uri $uri/ /index.html;   # Routing any error back to index.html
+  }
+}
+---
+
+〇 client\Dockerfile
+---
+# 以下はnginxコンテナのデフォルトで存在するdefault.confを上書きしている
+COPY ./nginx/default.conf /etc/nginx/conf.d/default.conf
+---
+
+
+〇 nginx\default.conf
+---
+# 以下はdev環境でのみ必要
+location /sockjs-node {
+  proxy_pass http://client;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "Upgrade";
+}
+---
+
+
+
+〇 以下EC2にデプロイするときの流れ
+
+1. AWS EC2インスタンスの新規作成
+・EC2サービスに移動
+・インスタンスの作成を押下
+・AMIを選択（無料枠でいいんじゃない）
+・インスタンスタイプを選択（t2.micro でいいんじゃない）
+　→　確認と作成を押下
+・諸々設定を確認して起動を押下
+・新しいキーペアの作成を選択
+　→　キーペア名を適当に入力
+　→　キーペアのダウンロードをクリック
+　→　インスタンスの作成をクリック
+・EC2サービスに移動
+　→　サイドバーからセキュリティグループをクリック
+・作成したEC2インスタンスをクリック
+・インバウンドルールを編集をクリック
+　→　ルールを追加をクリック
+　→　タイプ：HTTP、ソース：0.0.0.0/0　（☆httpアクセスじゃないと接続がタイムアウトするので注意）
+  →　タイプ：カスタムTCP、ポート範囲：8080、ソース：0.0.0.0/0　（☆httpアクセスじゃないと接続がタイムアウトするので注意）
+　→　ルールを保存
+
+2. EC2インスタンスにssh接続
+・Tera Termを起動
+　→　TCP/IPを選択
+　→　ホストにEC2インスタンスのパブリックIPv4DNSをコピペ
+　→　TCPポート：22、サービス：SSH
+　→　OK
+　→　セキュリティ警告が表示されたら続行をクリック
+　→　SSH認証ウインドウが表示されたら、ユーザー名：ec2-user、RSA/DSA/...鍵を使う を選択して秘密鍵をクリック→上記でダウンロードした鍵（.pem）を選択（全てのファイルを表示で選択できるようになる）
+　→　OKをクリック
+　→　EC2に接続できる
+
+3. EC2インスタンスにdockerとdocker-composeをインストール
+$ sudo yum install -y docker          # dockerのインストール
+$ sudo service docker start           # dockerの起動
+$ sudo usermod -a -G docker ec2-user  # ec2-userをdockerグループに入れる。これでec2-userがdockerコマンドを実行できる
+$ sudo docker info                    # dockerの起動確認
+$ sudo curl -L "https://github.com/docker/compose/releases/download/1.27.4/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+$ sudo chmod +x /usr/local/bin/docker-compose
+$ docker-compose --version            # 正常にバージョンが表示されたら完了
+
+※docker-composeがdenyされたら
+$ cd /
+$ sudo nano /etc/sudoers
+  Defaults    secure_path = /sbin:/bin:/usr/sbin:/usr/bin
+  ↓
+  Defaults    secure_path = /sbin:/bin:/usr/sbin:/usr/local/bin:/usr/bin
+
+※react-scriptがdenyされたら
+$ chmod a+x client/node_modules/.bin/react-scripts
+
+4. EC2インスタンスにソースコード転送
+・Tera Term の ファイル → SSH SCP をクリック
+　→　ポップアップしたウィンドウの上段フォームにて、Fromの「...」をクリックしてデプロイしたいソースコードのzipファイルを選択
+　→ To:には ~/ を入力
+　→ Sendをクリック
+・Tera Term → ls でちゃんと転送できたか確認
+・unzip <filename.zip> で解答
+・cd filename → sudo docker-compose up --build でコンテナ起動
+
+☆httpアクセスじゃないと接続がタイムアウトするので注意
