@@ -2,6 +2,9 @@
 1. docker-compose up の前に server/ と client/ で npm install しておく
 2. mysqlのdocker imageのバージョンは 8 だとプロトコルが変わってるからエラーになる
 
+〇ワークフロー
+開発 → docker-compose -f docker-compose.dev.yml up
+本番 → EC2にデプロイして docker-compose up
 
 〇 RDS等と接続したい場合は以下参考
 https://github.com/ISKroom/multi-docker
